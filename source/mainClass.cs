@@ -1,26 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Reflection;
-using BattleTech;
+﻿using BattleTech;
 using Harmony;
-using UnityEngine;
-
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Random = System.Random;
 
 //code taken and modified from: https://github.com/Mpstark/LessPilotInjuries
-namespace LessHeadInjuries
+//code taken and modified from: https://github.com/RealityMachina/Battletech_LessHeadInjuries
+namespace FewerHeadInjuries
 {
-
-    public static class LessHeadInjuries
+    public static class FewerHeadInjuries
     {
-        public static float ArmorHeadHitIgnoreDamageBelow = 10;
-        public static float StructHeadHitIgnoreDamageBelow = 5;
+        //public static float ArmorHeadHitIgnoreDamageBelow = 10;
+        //public static float StructHeadHitIgnoreDamageBelow = 5;
         public static HashSet<Pilot> IgnoreNextHeadHit = new HashSet<Pilot>();
 
         public static void Init()
         {
-            var harmony = HarmonyInstance.Create("Battletech.realitymachina.LessHeadInjuries");
+            var harmony = HarmonyInstance.Create("com.gnivler.FewerHeadInjuries");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
         }
 
@@ -31,53 +28,58 @@ namespace LessHeadInjuries
     }
 
     [HarmonyPatch(typeof(BattleTech.GameInstance), "LaunchContract", new Type[] { typeof(Contract), typeof(string) })]
-    public static class BattleTech_GameInstance_LaunchContract_Patch
+    public static class PatchLaunchContract
     {
         static void Postfix()
         {
             // reset on new contracts
-            LessHeadInjuries.Reset();
+            FewerHeadInjuries.Reset();
         }
     }
 
     [HarmonyPatch(typeof(BattleTech.Mech), "DamageLocation")]
-    public static class BattleTech_Mech_DamageLocation_Patch
+    public static class PatchDamageLocation
     {
-        static void Prefix(Mech __instance, int originalHitLoc, WeaponHitInfo hitInfo, ArmorLocation aLoc, Weapon weapon, float totalDamage, int hitIndex, AttackImpactQuality impactQuality)
+
+        static void Prefix(Mech __instance, ArmorLocation aLoc, float totalDamage)
         {
             if (aLoc == ArmorLocation.Head)
-            {
-                //we do some quick calculation of damage to see if it's an armor hit or an structure hit
-                float currentArmor = __instance.GetCurrentArmor(aLoc);
-                float remainingDamage = totalDamage - currentArmor;
-
-                if (remainingDamage <= 0 && totalDamage < LessHeadInjuries.ArmorHeadHitIgnoreDamageBelow)
+            {          
+                var currentArmor = __instance.GetCurrentArmor(aLoc);
+                var maxArmor = __instance.GetMaxArmor(aLoc);
+                if (__instance.GetCurrentArmor(aLoc) == 0)
                 {
-                    //remainign damage less or equal to zero mean no structure penetration. Treat as an armour hit.
-                    LessHeadInjuries.IgnoreNextHeadHit.Add(__instance.pilot);
-                }
-                else if (remainingDamage > 0 && totalDamage < LessHeadInjuries.StructHeadHitIgnoreDamageBelow)
-                {
-                    LessHeadInjuries.IgnoreNextHeadHit.Add(__instance.pilot);
+                    return;
                 }
 
+                if (currentArmor - totalDamage <= 0)
+                {
+                    return;
+                }
+
+                var rng = new Random().Next(1, 101);
+                if (rng >= (currentArmor / maxArmor) * 100)
+                {
+                    FewerHeadInjuries.IgnoreNextHeadHit.Add(__instance.pilot);
+                }
             }
         }
     }
 
     [HarmonyPatch(typeof(BattleTech.Pilot), "SetNeedsInjury")]
-    public static class BattleTech_Pilot_SetNeedsInjury_Patch
+    public static class PatchSetNeedsInjury
     {
+        /// <summary>
+        /// true implies injury occurs
+        /// </summary>
         static bool Prefix(Pilot __instance, InjuryReason reason)
         {
-            if (reason == InjuryReason.HeadHit && LessHeadInjuries.IgnoreNextHeadHit.Contains(__instance))
+            if (reason == InjuryReason.HeadHit && FewerHeadInjuries.IgnoreNextHeadHit.Contains(__instance))
             {
-                LessHeadInjuries.IgnoreNextHeadHit.Remove(__instance);
+                FewerHeadInjuries.IgnoreNextHeadHit.Remove(__instance);
                 return false;
             }
-
             return true;
         }
     }
-
 }
