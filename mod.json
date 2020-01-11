@@ -1,0 +1,9 @@
+{
+    "Name": "FewerHeadInjuries",
+    "Enabled": true,
+    "Version": "1.2.4",
+    "Description": "injuries based on damage done to head",
+    "Author": "btmodders",
+
+    "DLL": "FewerHeadInjuries.dll",
+}
